@@ -1,26 +1,139 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Simple Chat</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Trips Assistant</title>
     <style>
-        #chat-box {
-            border: 1px solid black;
-            height: 300px;
-            overflow-y: scroll;
-            padding: 10px;
-            margin-bottom: 10px;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
+
+        .chat-container {
+            width: 100%;
+            max-width: 600px;
+            height: 80vh;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background-color: #4A90E2;
+            color: white;
+            padding: 15px;
+            font-size: 1.2em;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        #chat-box {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            border-bottom: 1px solid #eee;
+        }
+
         .message {
-            margin-bottom: 5px;
+            margin-bottom: 15px;
+            line-height: 1.4;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-message {
+            align-items: flex-end;
+        }
+
+        .bot-message {
+            align-items: flex-start;
+        }
+
+        .message-content {
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 75%;
+        }
+
+        .user-message .message-content {
+            background-color: #4A90E2;
+            color: white;
+            border-bottom-right-radius: 0;
+        }
+
+        .bot-message .message-content {
+            background-color: #E5E5EA;
+            color: black;
+            border-bottom-left-radius: 0;
+        }
+        
+        .message-sender {
+            font-size: 0.8em;
+            color: #888;
+            margin-bottom: 4px;
+            padding: 0 5px;
+        }
+
+        .chat-input {
+            display: flex;
+            padding: 15px;
+            background-color: #f4f7f6;
+        }
+
+        #user-input {
+            flex-grow: 1;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            padding: 10px 15px;
+            font-size: 1em;
+            margin-right: 10px;
+            outline: none;
+        }
+
+        #user-input:focus {
+            border-color: #4A90E2;
+        }
+
+        #send-button {
+            background-color: #4A90E2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        #send-button:hover {
+            background-color: #357ABD;
         }
     </style>
 </head>
 <body>
-    <div id="chat-box">
-        <!-- Messages will appear here -->
+    <div class="chat-container">
+        <div class="chat-header">
+            Google Trips Assistant
+        </div>
+        <div id="chat-box">
+            <!-- Messages will appear here -->
+        </div>
+        <div class="chat-input">
+            <input type="text" id="user-input" placeholder="Ask about your next trip...">
+            <button id="send-button">Send</button>
+        </div>
     </div>
-    <input type="text" id="user-input" placeholder="Type your message...">
-    <button id="send-button">Send</button>
 
     <script>
         const sendButton = document.getElementById('send-button');
@@ -30,50 +143,90 @@
         sendButton.addEventListener('click', sendMessage);
         userInput.addEventListener('keypress', function(event) {
             if (event.key === 'Enter') {
+                event.preventDefault(); // Prevent form submission
                 sendMessage();
             }
         });
 
-        function sendMessage() {
-            var userInput = document.getElementById('user-input');
-            var chatBox = document.getElementById('chat-box');
-            var message = userInput.value.trim();
+        async function sendMessage() {
+            const messageText = userInput.value.trim();
+            if (!messageText) return;
 
-            if (message) {
-                // Display user message immediately
-                var userMessageElement = document.createElement('div');
-                userMessageElement.classList.add('message', 'user-message');
-                userMessageElement.textContent = 'User: ' + message;
-                chatBox.appendChild(userMessageElement);
+            displayMessage(messageText, 'user');
+            userInput.value = '';
+            chatBox.scrollTop = chatBox.scrollHeight;
 
-                userInput.value = ''; // Clear input field
-                chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to the bottom
+            // Create a placeholder for the bot's response and update it as tokens arrive
+            const botMessageWrapper = document.createElement('div');
+            botMessageWrapper.classList.add('message', 'bot-message');
 
-                // Send message to backend
-                fetch('/send_message', {
+            const senderElement = document.createElement('div');
+            senderElement.classList.add('message-sender');
+            senderElement.textContent = 'Bot';
+            
+            const contentElement = document.createElement('div');
+            contentElement.classList.add('message-content');
+            contentElement.textContent = ''; // Start empty
+            
+            botMessageWrapper.appendChild(senderElement);
+            botMessageWrapper.appendChild(contentElement);
+            chatBox.appendChild(botMessageWrapper);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                const response = await fetch('/send_message', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ message: message }),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    // Fetch and display all messages after sending
-                    const chatBox = document.getElementById('chat-box');
-                    chatBox.innerHTML = ''; // Clear current messages
-                    data.messages.forEach(msg => {
-                        const messageElement = document.createElement('div');
-                        messageElement.classList.add('message', `${msg.sender}-message`);
-                        messageElement.textContent = `${msg.sender}: ${msg.text}`;
-                        chatBox.appendChild(messageElement);
-                    });
-                })
-                .catch((error) => {
-                    console.error('Error sending message:', error);
-                    // Optionally display an error message in the chat
-                    displayMessage('Error sending message.');
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: messageText }),
                 });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const parts = buffer.split('\n\n');
+                    
+                    buffer = parts.pop() || ''; 
+
+                    for (const part of parts) {
+                        if (part.startsWith('data: ')) {
+                            const jsonStr = part.substring(6).trim();
+                            if (jsonStr) {
+                                try {
+                                    const data = JSON.parse(jsonStr);
+                                    contentElement.textContent += data.token;
+                                    chatBox.scrollTop = chatBox.scrollHeight;
+                                } catch (e) {
+                                    console.error('Failed to parse JSON:', jsonStr, e);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (buffer.startsWith('data: ')) {
+                    const jsonStr = buffer.substring(6).trim();
+                     if (jsonStr) {
+                        try {
+                            const data = JSON.parse(jsonStr);
+                            contentElement.textContent += data.token;
+                            chatBox.scrollTop = chatBox.scrollHeight;
+                        } catch (e) {
+                            console.error('Failed to parse JSON:', jsonStr, e);
+                        }
+                    }
+                }
+
+            } catch (error) {
+                console.error('Error streaming message:', error);
+                contentElement.textContent = 'Error: Could not get response from the server.';
             }
         }
 
@@ -81,32 +234,37 @@
             fetch('/get_messages')
                 .then(response => response.json())
                 .then(data => {
-                    const chatBox = document.getElementById('chat-box');
-                    chatBox.innerHTML = ''; // Clear current messages
+                    chatBox.innerHTML = ''; // Clear before redrawing
                     data.messages.forEach(msg => {
-                        const messageElement = document.createElement('div');
-                        messageElement.classList.add('message', `${msg.sender}-message`);
-                        messageElement.textContent = `${msg.sender}: ${msg.text}`;
-                        chatBox.appendChild(messageElement);
+                        displayMessage(msg.text, msg.sender);
                     });
-                    chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to the bottom
+                    chatBox.scrollTop = chatBox.scrollHeight;
                 })
-                .catch((error) => {
+                .catch(error => {
                     console.error('Error fetching messages:', error);
+                    displayMessage('Error: Could not load messages.', 'system');
                 });
         }
 
-        // Fetch messages when the page loads
-        fetchMessages();
+        function displayMessage(text, sender) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('message', `${sender}-message`);
 
-        function displayMessage(message, sender = 'system') {
-            const chatBox = document.getElementById('chat-box');
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message', `${sender}-message`);
-            messageElement.textContent = `${sender}: ${message}`;
-            chatBox.appendChild(messageElement);
-            chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to the bottom
+            const senderElement = document.createElement('div');
+            senderElement.classList.add('message-sender');
+            senderElement.textContent = sender.charAt(0).toUpperCase() + sender.slice(1);
+            
+            const contentElement = document.createElement('div');
+            contentElement.classList.add('message-content');
+            contentElement.textContent = text;
+            
+            messageWrapper.appendChild(senderElement);
+            messageWrapper.appendChild(contentElement);
+            chatBox.appendChild(messageWrapper);
         }
+
+        // Initial fetch of messages
+        fetchMessages();
     </script>
 </body>
 </html>

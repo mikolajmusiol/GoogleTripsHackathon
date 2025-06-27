@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Trips Planner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Google Material colors */
+            --google-blue: #4285F4;
+            --google-red: #DB4437;
+            --google-yellow: #F4B400;
+            --google-green: #0F9D58;
+        }
+        * {box-sizing: border-box;}
+        body {
+            margin: 0;
+            font-family: 'Roboto', Arial, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: var(--google-blue);
+            color: white;
+            padding: 12px 24px;
+            font-size: 1.4rem;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        /* Left (form) */
+        #question-pane {
+            width: 40%;
+            min-width: 320px;
+            max-width: 480px;
+            background: white;
+            border-right: 1px solid #e0e0e0;
+            padding: 24px;
+            overflow-y: auto;
+        }
+        /* Right (output) */
+        #output-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #fafafa;
+            padding: 24px;
+            overflow-y: auto;
+        }
+        h2 {
+            margin-top: 0;
+            color: var(--google-blue);
+            font-weight: 500;
+        }
+        label {
+            display: block;
+            margin-top: 16px;
+            font-weight: 500;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            margin-top: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--google-blue);
+            outline: none;
+        }
+        textarea { resize: vertical; }
+        #generate-btn {
+            margin-top: 24px;
+            background: var(--google-blue);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.25s;
+        }
+        #generate-btn:hover { background: #357ae8; }
+        /* Markdown output styling */
+        #plan-output {
+            white-space: pre-wrap;
+            font-family: 'Roboto Mono', ui-monospace, monospace;
+            line-height: 1.45;
+            color: #202124;
+        }
+        #loading-spinner {
+            display: none;
+            margin-top: 16px;
+            color: var(--google-blue);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <header>Google Trips Planner</header>
+    <main>
+        <section id="question-pane">
+            <h2>Tell us about your trip</h2>
+            <form id="trip-form">
+                <label for="trip_name">Trip name</label>
+                <input type="text" id="trip_name" name="trip_name" placeholder="Summer in Europe" required>
+
+                <label for="origin">Origin city</label>
+                <input type="text" id="origin" name="origin" placeholder="San Francisco, CA" required>
+
+                <label for="destination">Destination city</label>
+                <input type="text" id="destination" name="destination" placeholder="Paris, France" required>
+
+                <label for="start_date">Start date</label>
+                <input type="date" id="start_date" name="start_date" required>
+
+                <label for="length_days">Length of trip (days)</label>
+                <input type="number" id="length_days" name="length_days" min="1" value="7" required>
+
+                <label for="travelers">Number of travelers</label>
+                <input type="number" id="travelers" name="travelers" min="1" value="1">
+
+                <label for="budget">Budget (total)</label>
+                <select id="budget" name="budget">
+                    <option value="Economy">Economy</option>
+                    <option value="Comfort" selected>Comfort</option>
+                    <option value="Luxury">Luxury</option>
+                </select>
+
+                <label for="interests">Interests (comma-separated)</label>
+                <input type="text" id="interests" name="interests" placeholder="Museums, local food, hiking">
+
+                <label for="accessibility">Accessibility considerations</label>
+                <textarea id="accessibility" name="accessibility" rows="3" placeholder="Wheelchair friendly venues, minimal walking"></textarea>
+
+                <button id="generate-btn" type="submit">Generate Plan</button>
+                <div id="loading-spinner">Generating plan…</div>
+            </form>
+        </section>
+        <section id="output-pane">
+            <h2>Your day-by-day itinerary</h2>
+            <div id="plan-output">Fill in the trip details and click "Generate Plan" to see your itinerary here.</div>
+        </section>
+    </main>
+
+    <script>
+        const form = document.getElementById('trip-form');
+        const outputEl = document.getElementById('plan-output');
+        const spinner = document.getElementById('loading-spinner');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            outputEl.textContent = '';
+            spinner.style.display = 'block';
+
+            const formData = new FormData(form);
+            const jsonBody = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch('/plan_trip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(jsonBody)
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop() || '';
+                    for (const part of parts) {
+                        if (part.startsWith('data: ')) {
+                            const jsonStr = part.slice(6).trim();
+                            if (!jsonStr) continue;
+                            try {
+                                const data = JSON.parse(jsonStr);
+                                outputEl.textContent += data.token;
+                                outputEl.scrollTop = outputEl.scrollHeight;
+                            } catch (err) {
+                                console.error('Parse error', err, jsonStr);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                outputEl.textContent = 'Error generating plan. Please try again.';
+            } finally {
+                spinner.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
