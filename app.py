@@ -9,57 +9,41 @@ app = Flask(__name__)
 messages = []
 
 # ---------- Multi-agent helper functions ----------
-import google.generativeai as genai
 
-def _gemini_json(prompt: str):
-    """Call Gemini and return parsed JSON or None."""
-    resp = model.generate_content(prompt)
+from data_sources.web_search import create_search_web_tool
+
+# ----- Web search helper -----
+_tavily_tool = create_search_web_tool()
+
+def _web_search(query: str, max_results: int = 5):
+    """Return Tavily web search results list (max `max_results` items)."""
     try:
-        return json.loads(resp.text)
-    except json.JSONDecodeError:
-        return None
+        results = _tavily_tool.invoke(query)
+        # ensure list-like response
+        if isinstance(results, list):
+            trimmed = results[:max_results]
+        else:
+            trimmed = list(results)[:max_results]
+        print('[DEBUG] Tavily query:', query, 'results:', len(trimmed))
+        return trimmed
+    except Exception as e:
+        print('[DEBUG] Tavily search error', e)
+        return []
 
 def get_weather_forecast(destination: str, start_date: str, num_days: int):
-    dates = []
-    try:
-        start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
-        dates = [(start_dt + datetime.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(num_days)]
-    except Exception:
-        return []
-    schema = {"type":"array","items":{"type":"object","properties":{
-        "date":{"type":"string"},"summary":{"type":"string"},"high_c":{"type":"number"},"low_c":{"type":"number"}},
-        "required":["date","summary","high_c","low_c"],"propertyOrdering":["date","summary","high_c","low_c"]}}
-    prompt = (
-        f"Provide 1-sentence weather summary and high/low in Celsius for each date in {destination}. "
-        f"Return ONLY JSON matching this schema: {json.dumps(schema)}. Dates: {dates}.")
-    return _gemini_json(prompt) or []
+    """Return weather-related snippets via Tavily search."""
+    query = f"{destination} weather forecast next {num_days} days"
+    return _web_search(query)
 
 def get_flight_options(origin: str, destination: str, start_date: str):
-    schema = {"type":"array","items":{"type":"object","properties":{
-        "airline":{"type":"string"},"flight_no":{"type":"string"},"depart_time":{"type":"string"},"arrive_time":{"type":"string"},
-        "price_usd":{"type":"number"},"link":{"type":"string"}},
-        "required":["airline","flight_no","depart_time","arrive_time","price_usd","link"],"propertyOrdering":["airline","flight_no","depart_time","arrive_time","price_usd","link"]}}
-    prompt = (
-        f"Find up to 3 economy flights from {origin} to {destination} near {start_date}. Prices USD. "
-        f"Return ONLY JSON per schema: {json.dumps(schema)}.")
-    return _gemini_json(prompt) or []
+    """Return flight option snippets via Tavily search."""
+    query = f"flights {origin} to {destination} {start_date} economy"
+    return _web_search(query)
 
 def get_hotel_options(destination: str, start_date: str, num_days: int):
-    end_date = ""
-    try:
-        end_date = (datetime.datetime.strptime(start_date, "%Y-%m-%d") + datetime.timedelta(days=num_days)).strftime("%Y-%m-%d")
-    except Exception:
-        pass
-    schema = {"type":"array","items":{"type":"object","properties":{
-        "name":{"type":"string"},"location":{"type":"string"},"price_per_night_usd":{"type":"number"},
-        "total_price_usd":{"type":"number"},"rating":{"type":"number"},"link":{"type":"string"}},
-        "required":["name","location","price_per_night_usd","total_price_usd","rating","link"],
-        "propertyOrdering":["name","location","price_per_night_usd","total_price_usd","rating","link"]}}
-    prompt = (
-        f"List 3 highly rated hotels in {destination} between {start_date} and {end_date}. Prices USD. "
-        f"Return ONLY JSON per schema: {json.dumps(schema)}.")
-    return _gemini_json(prompt) or []
-
+    """Return hotel recommendation snippets via Tavily search."""
+    query = f"best hotels in {destination} near {start_date}"
+    return _web_search(query)
 
 @app.route('/')
 def index():
@@ -74,8 +58,21 @@ def plan_trip():
     # gather agent data
     length_days = int(data.get('length_days', 1) or 1)
     weather = get_weather_forecast(data.get('destination',''), data.get('start_date',''), length_days)
+    print('[DEBUG] Weather len', len(weather))
     flights = get_flight_options(data.get('origin',''), data.get('destination',''), data.get('start_date',''))
+    print('[DEBUG] Flights len', len(flights))
     hotels = get_hotel_options(data.get('destination',''), data.get('start_date',''), length_days)
+    print('[DEBUG] Hotels len', len(hotels))
+
+    # Fetch additional broader web context using Tavily
+    local_search_tool = create_search_web_tool()
+    search_query = f"{data.get('destination','')} travel guide top attractions"
+    try:
+        web_results = local_search_tool.invoke(search_query)
+    except Exception as e:
+        print('[DEBUG] Tavily search error', e)
+        web_results = []
+    print('[DEBUG] Tavily results len', len(web_results))
 
     # Build a rich prompt from the form fields
     prompt_lines = [
@@ -90,20 +87,22 @@ def plan_trip():
         f"- Interests: {data.get('interests','')}",
         f"- Accessibility considerations: {data.get('accessibility','None')}\n",
         "Day-by-day plan including a weather box for each day and a top section with flight options (use links) and recommended hotels. Use the provided JSON context strictly.",
-        "\nJSON_CONTEXT::\n" + json.dumps({"weather": weather, "flights": flights, "hotels": hotels})]
+        "\nJSON_CONTEXT::\n" + json.dumps({"weather": weather, "flights": flights, "hotels": hotels, "web": web_results})]
     prompt = "\n".join(prompt_lines)
 
     # Create minimal message history expected by LLM helper
     message_history = [{"sender": "user", "text": prompt}]
 
-    from data_sources.web_search import create_search_web_tool
 
-    # GoogleSearch removed; Tavily search tool can be utilized elsewhere if needed
+
 # tavily_search_tool = create_search_web_tool()
 
     def stream_llm():
         # Use Gemini with Google Search grounding enabled
-        stream_iter = model.generate_content(prompt, stream=True)
+        # Pass Tavily results into the prompt for grounding
+        augmented_prompt = prompt + "\nWEB_SEARCH_RESULTS::\n" + json.dumps(web_results)
+        print('[DEBUG] Final prompt preview:', augmented_prompt[:1000])
+        stream_iter = model.generate_content(augmented_prompt, stream=True)
         for chunk in stream_iter:
             yield f'data: {json.dumps({"token": chunk.text})}\n\n'
 
@@ -154,7 +153,7 @@ def calendar_ics():
     trip_name = data.get('trip_name', 'Trip')
     start_date = data.get('start_date')  # YYYY-MM-DD
 
-    # naive parse days
+        # naive parse days
     lines = plan_text.splitlines()
     day_titles = [ln for ln in lines if ln.startswith('## Day')]
     from datetime import datetime, timedelta
