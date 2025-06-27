@@ -1,6 +1,6 @@
 import json
 
-from langchain_community.tools import TavilySearchResults
+from langchain_tavily import TavilySearch
 from langchain_core.tools import tool
 
 
@@ -115,6 +115,6 @@ def web_search(query: str) -> str:
     Returns a JSON string of search results.
     """
     print(f"Performing web search for: {query}")
-    tavily_tool = TavilySearchResults(max_results=5, tavily_api_key="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") # You can adjust max_results
+    tavily_tool = TavilySearch(max_results=5, tavily_api_key="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") # You can adjust max_results
     results = tavily_tool.invoke(query)
     return json.dumps({"search_results": results})
