@@ -3,10 +3,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 def create_search_web_tool(max_result=5):
     tool = TavilySearch(
-        max_results=5,
+        max_results=max_result,
         topic="general",
         # include_answer=False,
         # include_raw_content=False,

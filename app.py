@@ -96,13 +96,14 @@ def plan_trip():
     # Create minimal message history expected by LLM helper
     message_history = [{"sender": "user", "text": prompt}]
 
-    from google.generativeai import types as genai_types
+    from data_sources.web_search import create_search_web_tool
 
-    search_tool = genai_types.Tool(google_search=genai_types.GoogleSearch())
+    # GoogleSearch removed; Tavily search tool can be utilized elsewhere if needed
+# tavily_search_tool = create_search_web_tool()
 
     def stream_llm():
         # Use Gemini with Google Search grounding enabled
-        stream_iter = model.generate_content(prompt, tools=[search_tool], stream=True)
+        stream_iter = model.generate_content(prompt, stream=True)
         for chunk in stream_iter:
             yield f'data: {json.dumps({"token": chunk.text})}\n\n'
 
