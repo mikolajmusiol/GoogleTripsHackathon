@@ -10,20 +10,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* Light theme (fallback) */
+            /* Light theme (default) */
             --google-blue: #4285F4;
+            --google-green: #34A853;
             --surface: #ffffff;
-            --surface-alt: #fafafa;
+            --surface-alt: #f8f9fa;
             --text-primary: #202124;
+            --text-secondary: #5f6368;
             --border: #e0e0e0;
+            --shadow-color: rgba(0,0,0,0.1);
         }
         @media (prefers-color-scheme: dark) {
             :root {
-                --google-blue: #1a73e8;
-                --surface: #1f1f1f;
-                --surface-alt: #121212;
+                --google-blue: #8ab4f8;
+                --google-green: #81c995;
+                --surface: #202124;
+                --surface-alt: #171717;
                 --text-primary: #e8eaed;
+                --text-secondary: #9aa0a6;
                 --border: #3c4043;
+                --shadow-color: rgba(0,0,0,0.4);
             }
         }
         
@@ -40,13 +46,16 @@
         header {
             display:flex;
             align-items:center;
-            gap:8px;
-            background: var(--google-blue);
-            color: white;
+            gap:12px;
+            background: var(--surface);
+            color: var(--text-primary);
             padding: 12px 24px;
             font-size: 1.4rem;
             font-weight: 500;
             letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+            box-shadow: 0 2px 4px var(--shadow-color);
+            z-index: 10;
         }
         main {
             flex: 1;
@@ -56,16 +65,14 @@
         /* Left (form) */
         #question-pane {
             width: 40%;
-            min-width: 320px;
+            min-width: 350px;
             max-width: 480px;
             background: var(--surface);
-            border-right: 1px solid var(--border);
             padding: 24px;
             overflow-y: auto;
         }
         /* Right (output) */
         #output-pane {
-            color: var(--text-primary);
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -76,84 +83,124 @@
         .product{font-weight:500;letter-spacing:.5px;font-size:1.3rem}
         h2 {
             margin-top: 0;
-            color: var(--google-blue);
+            color: var(--text-primary);
             font-weight: 500;
         }
         label {
             display: block;
-            margin-top: 16px;
+            margin-top: 20px;
+            margin-bottom: 8px;
             font-weight: 500;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
         }
         input, select, textarea {
             background: var(--surface);
             color: var(--text-primary);
             width: 100%;
             padding: 10px 12px;
-            margin-top: 6px;
             border: 1px solid var(--border);
-            border-radius: 4px;
+            border-radius: 8px;
             font-size: 1rem;
+            font-family: 'Roboto', sans-serif;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
         input:focus, select:focus, textarea:focus {
             border-color: var(--google-blue);
             outline: none;
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--google-blue) 25%, transparent);
         }
-        textarea { resize: vertical; }
-        #generate-btn {
-            margin-top: 24px;
-            background: var(--google-blue);
-            color: white;
+        textarea { resize: vertical; min-height: 80px; }
+        
+        #generate-btn, #calendar-btn {
+            width: 100%;
             border: none;
             padding: 12px 20px;
             font-size: 1rem;
-            border-radius: 4px;
+            font-weight: 500;
+            border-radius: 8px;
             cursor: pointer;
-            transition: background 0.25s;
+            transition: background-color 0.2s, transform 0.1s;
         }
-        #generate-btn:hover { background: #357ae8; }
-        /* Markdown output styling */
-        #plan-output {
-            color: var(--text-primary);
-            white-space: pre-wrap;
-            font-family: 'Roboto Mono', ui-monospace, monospace;
-            line-height: 1.5;
+
+        #generate-btn {
+            margin-top: 24px;
+            background: var(--google-blue);
+            color: var(--surface);
         }
-        #plan-output * {color: var(--text-primary);} /* ensure nested markdown uses correct color */
+        #generate-btn:hover { 
+             background: color-mix(in srgb, var(--google-blue) 85%, black);
+        }
+
         #calendar-btn {
             margin-top: 16px;
             background: var(--google-green);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 1rem;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.25s;
+            color: var(--surface);
         }
-        #calendar-btn:disabled { opacity: 0.5; cursor: default; }
-        #calendar-btn:hover:enabled { background: #0c7c43; }
+        #calendar-btn:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed; 
+        }
+        #calendar-btn:hover:enabled {
+            background: color-mix(in srgb, var(--google-green) 85%, black);
+        }
 
+        #generate-btn:active, #calendar-btn:active:enabled {
+             transform: scale(0.98);
+        }
+
+        /* Markdown output styling */
+        #plan-output {
+            line-height: 1.6;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        #plan-output.active {
+            opacity: 1;
+        }
+        #plan-output h1, #plan-output h2, #plan-output h3 {
+            font-weight: 500;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin-top: 24px;
+        }
+        #plan-output p { color: var(--text-secondary); }
+        #plan-output ul { padding-left: 20px; }
+        #plan-output li { margin-bottom: 8px; }
+        #plan-output strong { color: var(--text-primary); font-weight: 500; }
+
+        /* New Spinner */
         #loading-spinner {
             display: none;
-            margin-top: 16px;
-            color: var(--google-blue);
-            font-weight: 500;
+            margin: 24px auto 0;
+            width: 32px;
+            height: 32px;
+            border: 4px solid var(--border);
+            border-top: 4px solid var(--google-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <header><img src="/static/images/google_trips.png" alt="Google" height="24"><span class="product">Trips</span></header>
+    <header>
+        <img src="https://www.gstatic.com/images/branding/product/1x/gsa_32dp.png" alt="Google" height="24">
+        <span class="product">Trips Planner</span>
+    </header>
     <main>
         <section id="question-pane">
-            <h2>Tell us about your trip</h2>
             <form id="trip-form">
+                <h2>Tell us about your trip</h2>
+
                 <label for="trip_name">Trip name</label>
                 <input type="text" id="trip_name" name="trip_name" placeholder="Summer in Europe" required>
 
-                <label for="origin">Origin city</label>
-                <input type="text" id="origin" name="origin" placeholder="San Francisco, CA" required>
-
-                <label for="destination">Destination city</label>
+                <label for="destination">Destination</label>
                 <input type="text" id="destination" name="destination" placeholder="Paris, France" required>
 
                 <label for="start_date">Start date</label>
@@ -161,45 +208,59 @@
 
                 <label for="length_days">Length of trip (days)</label>
                 <input type="number" id="length_days" name="length_days" min="1" value="7" required>
-
-                <label for="travelers">Number of travelers</label>
-                <input type="number" id="travelers" name="travelers" min="1" value="1">
-
-                <label for="budget">Budget (total)</label>
+                
+                <label for="budget">Budget</label>
                 <select id="budget" name="budget">
                     <option value="Economy">Economy</option>
                     <option value="Comfort" selected>Comfort</option>
                     <option value="Luxury">Luxury</option>
                 </select>
 
-                <label for="interests">Interests (comma-separated)</label>
-                <input type="text" id="interests" name="interests" placeholder="Museums, local food, hiking">
-
-                <label for="accessibility">Accessibility considerations</label>
-                <textarea id="accessibility" name="accessibility" rows="3" placeholder="Wheelchair friendly venues, minimal walking"></textarea>
-
+                <label for="interests">Interests (e.g., museums, food, hiking)</label>
+                <input type="text" id="interests" name="interests" placeholder="Local food, art museums, walking tours">
+                
                 <button id="generate-btn" type="submit">Generate Plan</button>
-                <div id="loading-spinner">Generating plan…</div>
+                <div id="loading-spinner"></div>
                 <button id="calendar-btn" type="button" disabled>Add to Google Calendar</button>
             </form>
         </section>
         <section id="output-pane">
             <h2>Your day-by-day itinerary</h2>
-            <div id="plan-output">Fill in the trip details and click "Generate Plan" to see your itinerary here.</div>
+            <div id="plan-output">Fill in the trip details and click "Generate Plan" to see your personalized itinerary here.</div>
         </section>
     </main>
 
     <script>
         const form = document.getElementById('trip-form');
         const outputEl = document.getElementById('plan-output');
-        let planMarkdown = "";
         const spinner = document.getElementById('loading-spinner');
         const calendarBtn = document.getElementById('calendar-btn');
+        const generateBtn = document.getElementById('generate-btn');
+        let planMarkdown = "";
+
+        // Function to process a single JSON chunk from the stream
+        function processChunk(jsonStr) {
+            if (!jsonStr) return;
+            try {
+                const data = JSON.parse(jsonStr);
+                if (data.token) {
+                    planMarkdown += data.token;
+                    outputEl.innerHTML = marked.parse(planMarkdown);
+                    outputEl.scrollTop = outputEl.scrollHeight; // Auto-scroll
+                }
+            } catch (err) {
+                console.error('Failed to parse JSON chunk:', err, jsonStr);
+            }
+        }
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            outputEl.innerHTML = '';
+            planMarkdown = ""; // Reset markdown content
+            outputEl.innerHTML = 'Your plan will appear here shortly...';
+            outputEl.classList.remove('active');
             spinner.style.display = 'block';
+            calendarBtn.disabled = true;
+            generateBtn.disabled = true;
 
             const formData = new FormData(form);
             const jsonBody = Object.fromEntries(formData.entries());
@@ -212,6 +273,9 @@
                 });
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
+                outputEl.innerHTML = ''; // Clear placeholder text
+                outputEl.classList.add('active');
+
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
@@ -219,31 +283,40 @@
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
+
+                    // Add the new data to our buffer
                     buffer += decoder.decode(value, { stream: true });
+                    
+                    // Split the buffer into complete messages, delimited by double newlines
                     const parts = buffer.split('\n\n');
-                    buffer = parts.pop() || '';
+                    
+                    // The last part might be incomplete, so we keep it in the buffer
+                    buffer = parts.pop() || ''; 
+
+                    // Process all the complete messages
                     for (const part of parts) {
                         if (part.startsWith('data: ')) {
-                            const jsonStr = part.slice(6).trim();
-                            if (!jsonStr) continue;
-                            try {
-                                const data = JSON.parse(jsonStr);
-                                const chunkText = data.token.replace(/\\n/g, '\n');
-                                planMarkdown += chunkText;
-                                outputEl.innerHTML = marked.parse(planMarkdown);
-                                calendarBtn.disabled = false;
-                                outputEl.scrollTop = outputEl.scrollHeight;
-                            } catch (err) {
-                                console.error('Parse error', err, jsonStr);
-                            }
+                            const jsonStr = part.substring(6).trim();
+                            processChunk(jsonStr);
                         }
                     }
                 }
+
+                // After the loop, process any remaining data in the buffer
+                if (buffer.startsWith('data: ')) {
+                    const jsonStr = buffer.substring(6).trim();
+                    processChunk(jsonStr);
+                }
+
+                calendarBtn.disabled = false;
+
             } catch (err) {
                 console.error(err);
-                outputEl.textContent = 'Error generating plan. Please try again.';
+                outputEl.innerHTML = `<p style="color: #d93025;">Error generating plan. Please check your connection and try again.</p>`;
+                outputEl.classList.add('active');
             } finally {
                 spinner.style.display = 'none';
+                generateBtn.disabled = false;
             }
         });
     </script>
