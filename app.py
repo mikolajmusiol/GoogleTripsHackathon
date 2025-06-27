@@ -18,12 +18,10 @@ _tavily_tool = create_search_web_tool()
 def _web_search(query: str, max_results: int = 5):
     """Return Tavily web search results list (max `max_results` items)."""
     try:
-        results = _tavily_tool.invoke(query)
-        # ensure list-like response
-        if isinstance(results, list):
-            trimmed = results[:max_results]
-        else:
-            trimmed = list(results)[:max_results]
+        resp = _tavily_tool.invoke(query)
+        # Tavily returns a dict with 'results' key -> list of items
+        whole_list = resp.get('results', []) if isinstance(resp, dict) else []
+        trimmed = whole_list[:max_results]
         print('[DEBUG] Tavily query:', query, 'results:', len(trimmed))
         return trimmed
     except Exception as e:
@@ -68,7 +66,8 @@ def plan_trip():
     local_search_tool = create_search_web_tool()
     search_query = f"{data.get('destination','')} travel guide top attractions"
     try:
-        web_results = local_search_tool.invoke(search_query)
+        web_resp = local_search_tool.invoke(search_query)
+        web_results = web_resp.get('results', []) if isinstance(web_resp, dict) else []
     except Exception as e:
         print('[DEBUG] Tavily search error', e)
         web_results = []
@@ -101,7 +100,7 @@ def plan_trip():
         # Use Gemini with Google Search grounding enabled
         # Pass Tavily results into the prompt for grounding
         augmented_prompt = prompt + "\nWEB_SEARCH_RESULTS::\n" + json.dumps(web_results)
-        print('[DEBUG] Final prompt preview:', augmented_prompt[:1000])
+        print('[DEBUG] Final prompt preview:', augmented_prompt[:10000])
         stream_iter = model.generate_content(augmented_prompt, stream=True)
         for chunk in stream_iter:
             yield f'data: {json.dumps({"token": chunk.text})}\n\n'
