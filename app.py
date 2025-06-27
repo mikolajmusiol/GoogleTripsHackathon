@@ -7,11 +7,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configure Google Generative AI (Gemini). Expect the GOOGLE_API_KEY in environment or .env.
-api_key = os.getenv("GOOGLE_API_KEY")
-if not api_key:
-    raise RuntimeError("Please set GOOGLE_API_KEY in environment variables or in a .env file.")
+#api_key = os.getenv("GOOGLE_API_KEY")
+#if not api_key:
+    #raise RuntimeError("Please set GOOGLE_API_KEY in environment variables or in a .env file.")
 
-genai.configure(api_key=api_key)
+#genai.configure(api_key=api_key)
 model = genai.GenerativeModel("gemini-2.5-flash")
 
 app = Flask(__name__)
