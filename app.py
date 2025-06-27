@@ -1,4 +1,5 @@
 import json
+import datetime
 from flask import Flask, Response, render_template, request, jsonify
 from llm.main_llm import generate_llm_response, model
 
@@ -6,6 +7,58 @@ app = Flask(__name__)
 
 # In-memory storage for messages (replace with a database in a real app)
 messages = []
+
+# ---------- Multi-agent helper functions ----------
+import google.generativeai as genai
+
+def _gemini_json(prompt: str):
+    """Call Gemini and return parsed JSON or None."""
+    resp = model.generate_content(prompt)
+    try:
+        return json.loads(resp.text)
+    except json.JSONDecodeError:
+        return None
+
+def get_weather_forecast(destination: str, start_date: str, num_days: int):
+    dates = []
+    try:
+        start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+        dates = [(start_dt + datetime.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(num_days)]
+    except Exception:
+        return []
+    schema = {"type":"array","items":{"type":"object","properties":{
+        "date":{"type":"string"},"summary":{"type":"string"},"high_c":{"type":"number"},"low_c":{"type":"number"}},
+        "required":["date","summary","high_c","low_c"],"propertyOrdering":["date","summary","high_c","low_c"]}}
+    prompt = (
+        f"Provide 1-sentence weather summary and high/low in Celsius for each date in {destination}. "
+        f"Return ONLY JSON matching this schema: {json.dumps(schema)}. Dates: {dates}.")
+    return _gemini_json(prompt) or []
+
+def get_flight_options(origin: str, destination: str, start_date: str):
+    schema = {"type":"array","items":{"type":"object","properties":{
+        "airline":{"type":"string"},"flight_no":{"type":"string"},"depart_time":{"type":"string"},"arrive_time":{"type":"string"},
+        "price_usd":{"type":"number"},"link":{"type":"string"}},
+        "required":["airline","flight_no","depart_time","arrive_time","price_usd","link"],"propertyOrdering":["airline","flight_no","depart_time","arrive_time","price_usd","link"]}}
+    prompt = (
+        f"Find up to 3 economy flights from {origin} to {destination} near {start_date}. Prices USD. "
+        f"Return ONLY JSON per schema: {json.dumps(schema)}.")
+    return _gemini_json(prompt) or []
+
+def get_hotel_options(destination: str, start_date: str, num_days: int):
+    end_date = ""
+    try:
+        end_date = (datetime.datetime.strptime(start_date, "%Y-%m-%d") + datetime.timedelta(days=num_days)).strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    schema = {"type":"array","items":{"type":"object","properties":{
+        "name":{"type":"string"},"location":{"type":"string"},"price_per_night_usd":{"type":"number"},
+        "total_price_usd":{"type":"number"},"rating":{"type":"number"},"link":{"type":"string"}},
+        "required":["name","location","price_per_night_usd","total_price_usd","rating","link"],
+        "propertyOrdering":["name","location","price_per_night_usd","total_price_usd","rating","link"]}}
+    prompt = (
+        f"List 3 highly rated hotels in {destination} between {start_date} and {end_date}. Prices USD. "
+        f"Return ONLY JSON per schema: {json.dumps(schema)}.")
+    return _gemini_json(prompt) or []
 
 
 @app.route('/')
@@ -17,6 +70,12 @@ def index():
 def plan_trip():
     """Generate a streamed day-by-day travel plan from the submitted form data."""
     data = request.json or {}
+
+    # gather agent data
+    length_days = int(data.get('length_days', 1) or 1)
+    weather = get_weather_forecast(data.get('destination',''), data.get('start_date',''), length_days)
+    flights = get_flight_options(data.get('origin',''), data.get('destination',''), data.get('start_date',''))
+    hotels = get_hotel_options(data.get('destination',''), data.get('start_date',''), length_days)
 
     # Build a rich prompt from the form fields
     prompt_lines = [
@@ -30,8 +89,8 @@ def plan_trip():
         f"- Budget: {data.get('budget','')}",
         f"- Interests: {data.get('interests','')}",
         f"- Accessibility considerations: {data.get('accessibility','None')}\n",
-        "The output MUST be GitHub-flavored markdown and follow this exact structure:\n\n# <center>Trip Name (replace)</center>\n\n**Dates:** YYYY-MM-DD to YYYY-MM-DD (**Length:** X days)  \\n**Approx. Budget:** Provide a realistic overall budget in the local destination currency and USD.  \\n**Travelers:** <number>  \\n**Interests:** comma list  \\n\n---\n\n## Day 1 – <Short catchy day title>\n- Morning: ...\n- Afternoon: ...\n- Evening: ...\n- Dining Highlight: ...\n\n> Insider Tip: ...\n\n---\n\n(Repeat for each day)\n\nEnd the plan with a short inspirational quote.\n\nEnsure headings, bold text, and bullet formatting render beautifully."
-    ]
+        "Day-by-day plan including a weather box for each day and a top section with flight options (use links) and recommended hotels. Use the provided JSON context strictly.",
+        "\nJSON_CONTEXT::\n" + json.dumps({"weather": weather, "flights": flights, "hotels": hotels})]
     prompt = "\n".join(prompt_lines)
 
     # Create minimal message history expected by LLM helper
@@ -39,19 +98,11 @@ def plan_trip():
 
     from google.generativeai import types as genai_types
 
-    search_tool = None
-    try:
-        search_tool = genai_types.Tool(google_search=genai_types.GoogleSearch())
-    except AttributeError:
-        # Older library version without GoogleSearch; proceed without grounding
-        pass
+    search_tool = genai_types.Tool(google_search=genai_types.GoogleSearch())
 
     def stream_llm():
         # Use Gemini with Google Search grounding enabled
-        if search_tool:
-            stream_iter = model.generate_content(prompt, tools=[search_tool], stream=True)
-        else:
-            stream_iter = model.generate_content(prompt, stream=True)
+        stream_iter = model.generate_content(prompt, tools=[search_tool], stream=True)
         for chunk in stream_iter:
             yield f'data: {json.dumps({"token": chunk.text})}\n\n'
 
@@ -85,6 +136,13 @@ def get_messages():
     # Return messages in a format expected by the frontend
     return jsonify({"messages": messages})
 
+
+
+from flask import send_from_directory
+
+@app.route('/images/<path:filename>')
+def serve_image(filename):
+    return send_from_directory('images', filename)
 
 
 @app.route('/calendar_ics', methods=['POST'])
