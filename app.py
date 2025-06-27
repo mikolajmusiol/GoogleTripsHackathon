@@ -64,7 +64,20 @@ def plan_trip():
 
     # Fetch additional broader web context using Tavily
     local_search_tool = create_search_web_tool()
-    search_query = f"{data.get('destination','')} travel guide top attractions"
+    # Dynamically generate a tailored web search query via Gemini
+    try:
+        query_prompt = (
+            "You are an expert travel assistant. Based on the following JSON trip data, "
+            "write ONE concise web search query (max 15 words) that will retrieve up-to-date "
+            "information useful for planning this trip. Only return the query string and nothing else.\n\n"
+            + json.dumps(data)
+        )
+        print('[DEBUG] Query prompt:', query_prompt)
+        search_query_resp = model.generate_content(query_prompt)
+        search_query = search_query_resp.text.strip().split('\n')[0][:200]
+    except Exception as e:
+        print('[DEBUG] Gemini query generation error', e)
+        search_query = f"{data.get('destination','')} travel guide top attractions"
     try:
         web_resp = local_search_tool.invoke(search_query)
         web_results = web_resp.get('results', []) if isinstance(web_resp, dict) else []
@@ -85,16 +98,14 @@ def plan_trip():
         f"- Budget: {data.get('budget','')}",
         f"- Interests: {data.get('interests','')}",
         f"- Accessibility considerations: {data.get('accessibility','None')}\n",
-        "Day-by-day plan including a weather box for each day and a top section with flight options (use links) and recommended hotels. Use the provided JSON context strictly.",
+        f"- Other comments: {data.get('comments','')}\n",
+        "Day-by-day plan including a weather box for each day and a top section with flight options (use links) and recommended hotels. Use the provided JSON context strictly. Separate each day's section with <hr>. But never create a double <hr>",
         "\nJSON_CONTEXT::\n" + json.dumps({"weather": weather, "flights": flights, "hotels": hotels, "web": web_results})]
     prompt = "\n".join(prompt_lines)
 
     # Create minimal message history expected by LLM helper
     message_history = [{"sender": "user", "text": prompt}]
 
-
-
-# tavily_search_tool = create_search_web_tool()
 
     def stream_llm():
         # Use Gemini with Google Search grounding enabled

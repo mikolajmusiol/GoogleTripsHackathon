@@ -5,7 +5,7 @@ import os
 load_dotenv()
 
 genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-2.5-pro')
 
 def generate_llm_response(message_history):
     """

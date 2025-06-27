@@ -111,9 +111,26 @@
             transition: background 0.25s;
         }
         #generate-btn:hover { background: #357ae8; }
+        #generate-btn:active { background: #1a73e8; }
+        /* Loading spinner */
+        #plan-output.loading {
+            font-style: italic;
+        }
+        #plan-output.loading::before {
+            content: '';
+            display: inline-block;
+            width: 18px; height: 18px;
+            border: 3px solid #4285F4;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: -3px;
+        }
+        @keyframes spin { to { transform: rotate(360deg);} }
         /* Markdown output styling */
         #plan-output {
-            color: var(--text-primary);
+            color: #e8eaed;
             white-space: pre-wrap;
             font-family: 'Roboto Mono', ui-monospace, monospace;
             line-height: 1.5;
@@ -140,6 +157,75 @@
             font-weight: 500;
         }
         p, ul { margin: 0; }
+    </style>
+    <!-- Modern Google-themed overrides -->
+    <style>
+        /* Google Material Design vibes */
+        body {
+            background: linear-gradient(135deg, #1f1f1f 0%, #121212 100%);
+            font-size: 16px;
+            color: #e8eaed;
+        }
+        header {
+            background: linear-gradient(90deg, #4285F4 0%, #34A853 50%, #FBBC05 100%);
+            color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        #question-pane {
+            backdrop-filter: blur(6px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border-radius: 12px;
+            margin-right: 16px;
+        }
+        #output-pane {
+            background: #1e1e1e;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        }
+        #generate-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            letter-spacing: .3px;
+            transition: background .25s, transform .2s;
+        }
+        #generate-btn:hover {
+            background: #1a73e8;
+            transform: translateY(-1px);
+        }
+        #generate-btn:active {
+            transform: translateY(0);
+        }
+        #calendar-btn {
+            background: #34A853;
+            font-weight: 600;
+        }
+        #calendar-btn:hover:enabled { background: #0c7c43; }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+        }
+        ::selection {
+            background: #c6dafc;
+        }
+        @media (max-width: 768px) {
+            #question-pane {
+                width: 100%;
+                max-width: none;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+            main { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
@@ -179,8 +265,11 @@
                 <label for="accessibility">Accessibility considerations</label>
                 <textarea id="accessibility" name="accessibility" rows="3" placeholder="Wheelchair friendly venues, minimal walking"></textarea>
 
+                <label for="comments">Other comments</label>
+                <textarea id="comments" name="comments" rows="3" placeholder="Any additional notes or preferences"></textarea>
+
                 <button id="generate-btn" type="submit">Generate Plan</button>
-                <div id="loading-spinner">Generating plan…</div>
+                
                 <button id="calendar-btn" type="button" disabled>Add to Google Calendar</button>
             </form>
         </section>
@@ -194,13 +283,12 @@
         const form = document.getElementById('trip-form');
         const outputEl = document.getElementById('plan-output');
         let planMarkdown = "";
-        const spinner = document.getElementById('loading-spinner');
         const calendarBtn = document.getElementById('calendar-btn');
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            outputEl.innerHTML = '';
-            spinner.style.display = 'block';
+            outputEl.textContent = 'Generating plan…';
+            outputEl.classList.add('loading');
 
             const formData = new FormData(form);
             const jsonBody = Object.fromEntries(formData.entries());
@@ -231,6 +319,7 @@
                                 const data = JSON.parse(jsonStr);
                                 const chunkText = data.token.replace(/\\n/g, '\n');
                                 planMarkdown += chunkText;
+                                if (outputEl.classList.contains('loading')) outputEl.classList.remove('loading');
                                 outputEl.innerHTML = marked.parse(planMarkdown);
                                 calendarBtn.disabled = false;
                                 outputEl.scrollTop = outputEl.scrollHeight;
@@ -243,8 +332,9 @@
             } catch (err) {
                 console.error(err);
                 outputEl.textContent = 'Error generating plan. Please try again.';
+                outputEl.classList.remove('loading');
             } finally {
-                spinner.style.display = 'none';
+                
             }
         });
     </script>
