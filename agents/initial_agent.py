@@ -5,14 +5,14 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 
 from agents.schema import AgentState
-from agents.tools import search_flights, get_hotels, get_local_attractions
+from agents.tools import search_flights, get_hotels, get_local_attractions, web_search
 
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     temperature=0.7,
     api_key="AIzaSyDbCUYw6sdT2F92sfgg9Ht_8b9hbA6X3_w"
 )
-tools = [search_flights, get_hotels, get_local_attractions]
+tools = [search_flights, get_hotels, get_local_attractions, web_search]
 llm_with_tools = llm.bind_tools(tools)
 
 def call_model(state: AgentState, config: RunnableConfig):

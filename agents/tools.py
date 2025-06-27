@@ -1,4 +1,6 @@
 import json
+
+from langchain_community.tools import TavilySearchResults
 from langchain_core.tools import tool
 
 
@@ -104,3 +106,15 @@ def get_local_attractions(location: str, category: str = None) -> str:
             return json.dumps({"attractions": attractions["all"]})
     else:
         return json.dumps({"error": f"No attraction data available for {location}."})
+
+@tool
+def web_search(query: str) -> str:
+    """
+    Performs a web search for the given query using Tavily.
+    Useful for finding up-to-date information, news, facts, or general knowledge.
+    Returns a JSON string of search results.
+    """
+    print(f"Performing web search for: {query}")
+    tavily_tool = TavilySearchResults(max_results=5, tavily_api_key="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") # You can adjust max_results
+    results = tavily_tool.invoke(query)
+    return json.dumps({"search_results": results})
