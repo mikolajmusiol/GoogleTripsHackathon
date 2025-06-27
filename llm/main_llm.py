@@ -9,7 +9,7 @@ load_dotenv()
 genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
 model = genai.GenerativeModel('gemini-2.5-flash')
 
-def generate_llm_response(message_history):
+def generate_llm_response(message_history, tools=[]):
     """
     Generates a streaming response from the Gemini model using the full conversation history.
     """

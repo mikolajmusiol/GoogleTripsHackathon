@@ -3,6 +3,7 @@ import datetime
 from flask import Flask, Response, render_template, request, jsonify
 from llm.main_llm import generate_llm_response, model
 from google.generativeai import types as genai_types
+from flask import send_from_directory
 
 app = Flask(__name__)
 
@@ -98,7 +99,6 @@ def plan_trip():
 
 
 
-from flask import send_from_directory
 
 @app.route('/images/<path:filename>')
 def serve_image(filename):
