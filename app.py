@@ -2,6 +2,7 @@ import json
 import datetime
 from flask import Flask, Response, render_template, request, jsonify
 from llm.main_llm import generate_llm_response, model
+from google.generativeai import types as genai_types
 
 app = Flask(__name__)
 
@@ -93,48 +94,7 @@ def plan_trip():
     # Create minimal message history expected by LLM helper
     message_history = [{"sender": "user", "text": prompt}]
 
-
-
-# tavily_search_tool = create_search_web_tool()
-
-    def stream_llm():
-        # Use Gemini with Google Search grounding enabled
-        # Pass Tavily results into the prompt for grounding
-        augmented_prompt = prompt + "\nWEB_SEARCH_RESULTS::\n" + json.dumps(web_results)
-        print('[DEBUG] Final prompt preview:', augmented_prompt[:1000])
-        stream_iter = model.generate_content(augmented_prompt, stream=True)
-        for chunk in stream_iter:
-            yield f'data: {json.dumps({"token": chunk.text})}\n\n'
-
-    return Response(stream_llm(), mimetype='text/event-stream')
-
-
-@app.route('/send_message', methods=['POST'])
-def send_message():
-    user_message = request.json.get('message')
-    if not user_message:
-        return jsonify({"status": "error", "message": "No message provided"}), 400
-
-    messages.append({"sender": "user", "text": user_message})
-
-    def stream_llm_response():
-        full_response_text = ""
-        # The `generate_llm_response` function is now a generator that takes the whole history
-        for chunk in generate_llm_response(messages):
-            full_response_text += chunk
-            # Yield each chunk in the SSE format
-            yield f'data: {json.dumps({"token": chunk})}\n\n'
-        
-        # After the stream is complete, save the full message
-        messages.append({"sender": "bot", "text": full_response_text})
-
-    return Response(stream_llm_response(), mimetype='text/event-stream')
-
-
-@app.route('/get_messages', methods=['GET'])
-def get_messages():
-    # Return messages in a format expected by the frontend
-    return jsonify({"messages": messages})
+    return Response(generate_llm_response(message_history), mimetype='text/event-stream')
 
 
 
